@@ -27,6 +27,18 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit();
 }
 
+// Get and validate category_id from query parameter
+$categoryId = isset($_GET['category_id']) ? filter_var($_GET['category_id'], FILTER_VALIDATE_INT) : null;
+
+if ($categoryId === null || $categoryId === false || $categoryId <= 0) {
+    http_response_code(400); // Bad Request
+    echo json_encode([
+        "success" => false,
+        "message" => "Invalid or missing category ID query parameter ('category_id'). Please provide a positive integer."
+    ]);
+    exit();
+}
+
 // Database Connection
 $database = new Database();
 $db = $database->getConnection();
@@ -49,17 +61,32 @@ function sanitize_for_filename($string)
 }
 
 try {
-    // 1. Query to get all products
-    $productQuery = "
-        SELECT 
-            p.id, p.name, p.description, p.image_url, 
-            p.old_price, p.current_price, p.discount_percentage, 
-            p.amount, p.rating, p.reviews_count, 
-            p.new_product, p.free_delivery, p.shipping_information
-        FROM products p
-        ORDER BY p.created_at DESC
-    ";
+    // Optional: Check if category_id exists (good practice)
+    $checkCatQuery = "SELECT id FROM categories WHERE id = :category_id LIMIT 1";
+    $checkCatStmt = $db->prepare($checkCatQuery);
+    $checkCatStmt->bindParam(":category_id", $categoryId, PDO::PARAM_INT);
+    $checkCatStmt->execute();
+    if ($checkCatStmt->rowCount() == 0) {
+        http_response_code(404); // Not Found
+        echo json_encode([
+            "success" => false,
+            "message" => "Category not found.",
+            "data" => []
+        ]);
+        exit();
+    }
+
+    // 1. Query to get products for the specified category
+    $productQuery = "SELECT 
+                        p.id, p.name, p.description, p.image_url, 
+                        p.old_price, p.current_price, p.discount_percentage, 
+                        p.amount, p.rating, p.reviews_count, 
+                        p.new_product, p.free_delivery, p.shipping_information
+                     FROM products p
+                     WHERE p.category_id = :category_id
+                     ORDER BY p.created_at DESC";
     $productStmt = $db->prepare($productQuery);
+    $productStmt->bindParam(":category_id", $categoryId, PDO::PARAM_INT);
     $productStmt->execute();
 
     $products = [];
@@ -67,18 +94,16 @@ try {
         $productResults = $productStmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Prepare query for compatible cars (to be executed inside the loop)
-        $carQuery = "
-            SELECT 
-                cm.id as car_model_id, 
-                cm.name as model_name, 
-                cm.year as model_year, 
-                cb.name as brand_name
-            FROM product_compatibility pc
-            JOIN car_models cm ON pc.car_model_id = cm.id
-            JOIN car_brands cb ON cm.brand_id = cb.id
-            WHERE pc.product_id = :product_id
-            ORDER BY cb.name, cm.name, cm.year
-        ";
+        $carQuery = "SELECT 
+                        cm.id as car_model_id, 
+                        cm.name as model_name, 
+                        cm.year as model_year, 
+                        cb.name as brand_name
+                     FROM product_compatibility pc
+                     JOIN car_models cm ON pc.car_model_id = cm.id
+                     JOIN car_brands cb ON cm.brand_id = cb.id
+                     WHERE pc.product_id = :product_id
+                     ORDER BY cb.name, cm.name, cm.year";
         $carStmt = $db->prepare($carQuery);
 
         foreach ($productResults as $productRow) {
@@ -130,13 +155,15 @@ try {
     http_response_code(200);
     echo json_encode([
         "success" => true,
-        "message" => "Products retrieved successfully.",
+        "message" => "Products for category retrieved successfully.",
         "data" => $products
     ]);
 } catch (PDOException $e) {
+    // Log error: $e->getMessage()
     http_response_code(500);
     echo json_encode([
         "success" => false,
-        "message" => "An error occurred while retrieving products: " . $e->getMessage()
+        "message" => "An error occurred while retrieving category products: " . $e->getMessage()
+        // "message" => "An internal error occurred while retrieving category products."
     ]);
 }

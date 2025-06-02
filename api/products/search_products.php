@@ -27,6 +27,18 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     exit();
 }
 
+// Get and validate search query 'q' from query parameter
+$searchQuery = isset($_GET['query']) ? trim($_GET['query']) : null;
+
+if ($searchQuery === null || $searchQuery === '') {
+    http_response_code(400); // Bad Request
+    echo json_encode([
+        "success" => false,
+        "message" => "Missing or empty search query parameter ('query')."
+    ]);
+    exit();
+}
+
 // Database Connection
 $database = new Database();
 $db = $database->getConnection();
@@ -49,17 +61,20 @@ function sanitize_for_filename($string)
 }
 
 try {
-    // 1. Query to get all products
-    $productQuery = "
-        SELECT 
-            p.id, p.name, p.description, p.image_url, 
-            p.old_price, p.current_price, p.discount_percentage, 
-            p.amount, p.rating, p.reviews_count, 
-            p.new_product, p.free_delivery, p.shipping_information
-        FROM products p
-        ORDER BY p.created_at DESC
-    ";
+    // Prepare the search term for LIKE query
+    $searchTerm = '%' . $searchQuery . '%';
+
+    // 1. Query to find products matching the search term in name or description
+    $productQuery = "SELECT 
+                        p.id, p.name, p.description, p.image_url, 
+                        p.old_price, p.current_price, p.discount_percentage, 
+                        p.amount, p.rating, p.reviews_count, 
+                        p.new_product, p.free_delivery, p.shipping_information
+                     FROM products p
+                     WHERE p.name LIKE :searchTerm OR p.description LIKE :searchTerm
+                     ORDER BY p.name ASC";
     $productStmt = $db->prepare($productQuery);
+    $productStmt->bindParam(":searchTerm", $searchTerm);
     $productStmt->execute();
 
     $products = [];
@@ -67,18 +82,16 @@ try {
         $productResults = $productStmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Prepare query for compatible cars (to be executed inside the loop)
-        $carQuery = "
-            SELECT 
-                cm.id as car_model_id, 
-                cm.name as model_name, 
-                cm.year as model_year, 
-                cb.name as brand_name
-            FROM product_compatibility pc
-            JOIN car_models cm ON pc.car_model_id = cm.id
-            JOIN car_brands cb ON cm.brand_id = cb.id
-            WHERE pc.product_id = :product_id
-            ORDER BY cb.name, cm.name, cm.year
-        ";
+        $carQuery = "SELECT 
+                        cm.id as car_model_id, 
+                        cm.name as model_name, 
+                        cm.year as model_year, 
+                        cb.name as brand_name
+                     FROM product_compatibility pc
+                     JOIN car_models cm ON pc.car_model_id = cm.id
+                     JOIN car_brands cb ON cm.brand_id = cb.id
+                     WHERE pc.product_id = :product_id
+                     ORDER BY cb.name, cm.name, cm.year";
         $carStmt = $db->prepare($carQuery);
 
         foreach ($productResults as $productRow) {
@@ -130,13 +143,13 @@ try {
     http_response_code(200);
     echo json_encode([
         "success" => true,
-        "message" => "Products retrieved successfully.",
+        "message" => "Product search completed successfully.",
         "data" => $products
     ]);
 } catch (PDOException $e) {
     http_response_code(500);
     echo json_encode([
         "success" => false,
-        "message" => "An error occurred while retrieving products: " . $e->getMessage()
+        "message" => "An error occurred during product search: " . $e->getMessage()
     ]);
 }
