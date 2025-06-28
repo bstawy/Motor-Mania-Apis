@@ -52,7 +52,7 @@ try {
         $formattedBrands = [];
         foreach ($brands as $brand) {
             $formattedBrands[] = [
-                'id' => (string)$brand['id'], // Ensure ID is a string to match Dart model
+                'id' => (int)$brand['id'], // Ensure ID is a string to match Dart model
                 'name' => $brand['name'],
                 'logo_url' => $brand['logo_url']
             ];

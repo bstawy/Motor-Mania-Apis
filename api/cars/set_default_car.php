@@ -57,6 +57,12 @@ if (!$db) {
     exit();
 }
 
+// Helper function to sanitize names for image URLs
+function sanitizeNameForUrl($name)
+{
+    return strtolower(str_replace([' ', '-', '.'], '_', $name));
+}
+
 // 5. Perform Update within a Transaction
 try {
     $db->beginTransaction();
@@ -93,11 +99,57 @@ try {
 
     if ($updateTargetStmt->rowCount() == 1) {
         $db->commit();
-        http_response_code(200);
-        echo json_encode([
-            "success" => true,
-            "message" => "Default car updated successfully."
-        ]);
+        // Fetch the details of the newly set default car
+        $carDetailsQuery = "
+            SELECT
+                uc.id AS user_car_id,
+                cb.name AS brand_name,
+                cm.name AS model_name,
+                cm.year AS model_year
+            FROM
+                user_cars uc
+            JOIN
+                car_models cm ON uc.car_model_id = cm.id
+            JOIN
+                car_brands cb ON cm.brand_id = cb.id
+            WHERE
+                uc.id = :user_car_id AND uc.user_id = :user_id
+            LIMIT 1
+        ";
+        $carDetailsStmt = $db->prepare($carDetailsQuery);
+        $carDetailsStmt->bindParam(":user_car_id", $userCarId, PDO::PARAM_INT);
+        $carDetailsStmt->bindParam(":user_id", $userId, PDO::PARAM_INT);
+        $carDetailsStmt->execute();
+        $car = $carDetailsStmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($car) {
+            $brandSanitized = sanitizeNameForUrl($car['brand_name']);
+            $modelSanitized = sanitizeNameForUrl($car['model_name']);
+            $year = $car['model_year'];
+            $imageUrl = "/images/cars/{$brandSanitized}_{$modelSanitized}_{$year}.png";
+
+            $responseCar = [
+                "id" => (int)$car['user_car_id'],
+                "brand" => $car['brand_name'],
+                "model" => $car['model_name'],
+                "year" => (int)$car['model_year'],
+                "imageUrl" => $imageUrl
+            ];
+
+            http_response_code(200); // OK
+            echo json_encode([
+                "success" => true,
+                "message" => "Default car updated successfully.",
+                "data" => $responseCar
+            ]);
+        } else {
+            // Should not happen if ownership check passed, but handle defensively
+            http_response_code(500);
+            echo json_encode([
+                "success" => false,
+                "message" => "Default car updated, but failed to retrieve car details."
+            ]);
+        }
     } else {
         $db->rollBack();
         http_response_code(500);

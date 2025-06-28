@@ -72,8 +72,8 @@ try {
     $findModelQuery = "SELECT cm.id 
                        FROM car_models cm
                        JOIN car_brands cb ON cm.brand_id = cb.id
-                       WHERE cb.name = :brand_name 
-                       AND cm.name = :model_name 
+                       WHERE LOWER(cb.name) = LOWER(:brand_name)
+                       AND LOWER(cm.name) = LOWER(:model_name)
                        AND cm.year = :model_year 
                        LIMIT 1";
     $findModelStmt = $db->prepare($findModelQuery);

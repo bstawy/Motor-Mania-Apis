@@ -65,7 +65,7 @@ try {
         $formattedModels = [];
         foreach ($models as $model) {
             $formattedModels[] = [
-                'id' => (string)$model['id'],    // Ensure ID is a string
+                'id' => (int)$model['id'],    // Ensure ID is a string
                 'name' => (string)$model['name'], // Ensure name is a string
                 'year' => (int)$model['year']     // Ensure year is an integer
             ];

@@ -90,7 +90,7 @@ try {
 
             // Map to the CarModel structure
             $garageCars[] = [
-                'id' => (string)$row['user_car_id'],
+                'id' => (int)$row['user_car_id'],
                 'brand' => $row['brand_name'],
                 'model' => (string)$row['model_name'],
                 'year' => (int)$row['model_year'],
