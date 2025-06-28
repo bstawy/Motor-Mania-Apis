@@ -23,6 +23,6 @@ This apis is created for my Motor Mania mobile app, you can check it here:
 3. Extract all the files and move it to the 'WAMPP/www' or 'XAMPP/htdocs'
 4. Start the Apache and Mysql in your WAMPP/XAMPP control panel.
 5. Open your web browser and type 'localhost/phpmyadmin'
-6. In phpmyadmin page, create a new database from the left panel and name it as 'hms'
+6. In phpmyadmin page, create a new database from the left panel and name it as 'motor_mania'
 7. Import the file 'motor_mania.sql' inside your newly created database and click ok.
 8. Hurray! That's it!
